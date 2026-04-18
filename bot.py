@@ -3,13 +3,13 @@ import requests
 import json
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
-from google import genai
+from groq import Groq
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+client = Groq(api_key=GROQ_API_KEY)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
@@ -17,12 +17,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     prompt = "Extraia os dados abaixo e retorne APENAS um JSON sem markdown. Campos: fn, ln, phone (E.164), email, event_name (use Purchase), value (numero), currency (BRL/USD/EUR), event_time (ISO 8601), dob (MM/DD/YY), doby (ano 4 digitos), gen (M/F), age (numero), zip, ct, st, country (2 letras), madid. Use null se nao encontrado. Texto: " + msg
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
     )
 
-    texto = response.text.strip()
+    texto = response.choices[0].message.content.strip()
     clean = texto.replace("```json", "").replace("```", "").strip()
     data = json.loads(clean)
 
