@@ -1,15 +1,16 @@
 import os
 import requests
+import json
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
-from datetime import datetime
-import anthropic
+import google.generativeai as genai
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
-client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
@@ -20,18 +21,12 @@ Campos: fn, ln, phone (E.164), email, event_name (use Purchase), value (número)
 Use null se não encontrado.
 Texto: {msg}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    import json
-    texto = response.content[0].text.strip()
+    response = model.generate_content(prompt)
+    texto = response.text.strip()
     clean = texto.replace("```json","").replace("```","").strip()
     data = json.loads(clean)
 
-    params = {k: v for k, v in data.items() if v is not None}
+    params = {{k: v for k, v in data.items() if v is not None}}
     r = requests.get(WEBHOOK_URL, params=params)
     result = r.json()
 
@@ -44,7 +39,7 @@ Texto: {msg}"""
             f"🛍️ {data.get('event_name','')}"
         )
     else:
-        await update.message.reply_text("❌ Erro ao salvar na planilha. Tenta de novo!")
+        await update.message.reply_text("❌ Erro ao salvar. Tenta de novo!")
 
 app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
