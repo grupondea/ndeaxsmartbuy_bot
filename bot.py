@@ -13,7 +13,32 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.text
-    await update.message.reply_text("⏳ Recebi! Extraindo os dados...")
+    await update.message.reply_text("Recebi! Extraindo os dados...")
 
-    prompt = f"""Extraia os dados abaixo e retorne APENAS um JSON sem markdown.
-Campos: fn, ln, phone (E.164), email, event_name (use Purchase), value (número), currency (BRL/USD/EUR), event_time (ISO 8601), dob (MM/DD/YY), doby (ano 4 digitos
+    prompt = "Extraia os dados abaixo e retorne APENAS um JSON sem markdown. Campos: fn, ln, phone (E.164), email, event_name (use Purchase), value (numero), currency (BRL/USD/EUR), event_time (ISO 8601), dob (MM/DD/YY), doby (ano 4 digitos), gen (M/F), age (numero), zip, ct, st, country (2 letras), madid. Use null se nao encontrado. Texto: " + msg
+
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
+
+    texto = response.text.strip()
+    clean = texto.replace("```json", "").replace("```", "").strip()
+    data = json.loads(clean)
+
+    params = {k: v for k, v in data.items() if v is not None}
+    r = requests.get(WEBHOOK_URL, params=params)
+    result = r.json()
+
+    if result.get("status") == "ok":
+        nome = str(data.get("fn", "")) + " " + str(data.get("ln", ""))
+        telefone = str(data.get("phone", ""))
+        valor = str(data.get("value", ""))
+        evento = str(data.get("event_name", ""))
+        await update.message.reply_text("Salvo na planilha!\n\nNome: " + nome + "\nTelefone: " + telefone + "\nValor: R$ " + valor + "\nEvento: " + evento)
+    else:
+        await update.message.reply_text("Erro ao salvar. Tenta de novo!")
+
+app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+app.run_polling()
